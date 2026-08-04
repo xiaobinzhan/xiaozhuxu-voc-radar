@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>省心租 VOC 雷达</title>
+<link rel="stylesheet" href="/static/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <!-- 侧边导航 -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">📡</div>
+      <span class="logo-text">省心租 VOC 雷达</span>
+    </div>
+    <ul class="nav-list">
+      <li class="nav-item active" data-page="overview">
+        <span class="nav-icon">📊</span>监控总览
+      </li>
+      <li class="nav-item" data-page="notes">
+        <span class="nav-icon">📝</span>笔记库
+      </li>
+      <li class="nav-item" data-page="scenes">
+        <span class="nav-icon">🗂️</span>投诉场景
+      </li>
+      <li class="nav-item" data-page="tasks">
+        <span class="nav-icon">⚙️</span>搜索任务
+      </li>
+    </ul>
+    <div class="sidebar-footer">
+      <div id="collectionStatus" class="collection-status">
+        <span class="status-dot disconnected"></span>
+        <span class="status-text">采集器未连接</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 主内容区 -->
+  <main class="main">
+    <!-- 顶部栏 -->
+    <header class="topbar">
+      <h1 id="pageTitle">监控总览</h1>
+      <div class="topbar-actions">
+        <span id="sourceBadge" class="source-badge demo">演示数据</span>
+        <button id="exportBtn" class="btn btn-secondary" onclick="exportCSV()">导出 CSV</button>
+        <button id="syncBtn" class="btn btn-primary" onclick="requestSync()">立即同步</button>
+      </div>
+    </header>
+
+    <!-- Demo Banner -->
+    <div id="demoBanner" class="demo-banner" style="display:none">
+      ⚠️ 当前显示的是演示数据，不来自小红书真实采集。安装扩展并同步后将展示真实数据。
+    </div>
+
+    <!-- 页面容器 -->
+    <div id="pageContainer">
+
+      <!-- ===== 监控总览 ===== -->
+      <div id="page-overview" class="page active">
+        <!-- 指标卡 -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">近30天负面笔记</div>
+            <div class="metric-value" id="mNegative">--</div>
+            <div class="metric-change" id="mNegativeChange">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">负面声量占比</div>
+            <div class="metric-value" id="mRatio">--</div>
+            <div class="metric-sub">全部相关笔记</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">近30天正向笔记</div>
+            <div class="metric-value" id="mPositive">--</div>
+            <div class="metric-change" id="mPositiveChange">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">高风险事件</div>
+            <div class="metric-value" id="mHighRisk">--</div>
+            <div class="metric-sub">严重度≥4</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">独立发声用户</div>
+            <div class="metric-value" id="mUniqueAuthors">--</div>
+            <div class="metric-sub">负面作者去重</div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <!-- 情绪声量趋势 -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>情绪声量趋势</h3>
+              <span class="panel-sub">近6周</span>
+            </div>
+            <div id="trendChart" style="height:260px"></div>
+            <div id="trendInsight" class="insight-text"></div>
+          </div>
+
+          <!-- 不满意场景排行 -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>不满意场景排行</h3>
+              <span class="panel-sub">近30天</span>
+            </div>
+            <div id="sceneRankChart" style="height:260px"></div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <!-- 城市分布 -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>城市/地区分布</h3>
+              <span class="panel-sub">全部品牌相关</span>
+            </div>
+            <div id="cityChart" style="height:260px"></div>
+            <div class="insight-text">城市来源：正文提及 > 作者IP > 城市搜索词 > 未知</div>
+          </div>
+
+          <!-- 异常预警 -->
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>异常预警</h3>
+              <span class="panel-sub">自动检测</span>
+            </div>
+            <div id="alertList" class="alert-list">
+              <div class="alert-item alert-info">暂无异常预警</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 高风险证据表 -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <h3>近期高风险笔记</h3>
+            <span class="panel-sub">严重度≥4</span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>发布时间</th><th>标题</th><th>场景</th><th>城市</th>
+                  <th>互动量</th><th>风险等级</th>
+                </tr>
+              </thead>
+              <tbody id="highRiskTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 覆盖质量 -->
+        <div class="panel-card">
+          <div class="panel-header">
+            <h3>搜索可见覆盖</h3>
+            <span class="panel-sub">采集可信度</span>
+          </div>
+          <div id="coverageInfo" class="coverage-info">
+            <div class="coverage-placeholder">暂无采集数据，覆盖报告将在首次同步后生成</div>
+          </div>
+          <div class="coverage-disclaimer">
+            这不是小红书全站完整率，只代表当前账号在固定关键词下的搜索可见覆盖，受账号、搜索排序、平台限流、关键词范围影响。
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 笔记库 ===== -->
+      <div id="page-notes" class="page">
+        <div class="filter-bar">
+          <input type="text" id="searchKeyword" class="filter-input" placeholder="搜索标题/正文/作者/城市...">
+          <select id="filterEmotion" class="filter-select">
+            <option value="">全部情绪</option>
+            <option value="negative">负面</option>
+            <option value="neutral">中性</option>
+            <option value="positive">正向</option>
+          </select>
+          <select id="filterAuthorType" class="filter-select">
+            <option value="">全部身份</option>
+            <option value="tenant">租客</option>
+            <option value="landlord">业主</option>
+            <option value="unknown">待确认</option>
+          </select>
+          <select id="filterScene" class="filter-select">
+            <option value="">全部场景</option>
+          </select>
+          <input type="date" id="filterDateFrom" class="filter-input filter-date">
+          <input type="date" id="filterDateTo" class="filter-input filter-date">
+          <button class="btn btn-primary" onclick="applyFilters()">筛选</button>
+          <button class="btn btn-secondary" onclick="resetFilters()">重置</button>
+        </div>
+        <div class="filter-summary" id="filterSummary"></div>
+        <div id="notesList" class="notes-list"></div>
+        <div class="load-more-wrap">
+          <button id="loadMoreBtn" class="btn btn-secondary" style="display:none" onclick="loadMoreNotes()">加载更多</button>
+        </div>
+      </div>
+
+      <!-- ===== 投诉场景 ===== -->
+      <div id="page-scenes" class="page">
+        <div class="scene-tabs">
+          <button class="scene-tab active" data-type="tenant">租客侧</button>
+          <button class="scene-tab" data-type="landlord">业主侧</button>
+          <button class="scene-tab" data-type="unknown">身份待确认</button>
+        </div>
+        <div id="sceneList" class="scene-list"></div>
+      </div>
+
+      <!-- ===== 搜索任务 ===== -->
+      <div id="page-tasks" class="page">
+        <div class="panel-card">
+          <div class="panel-header"><h3>自动采集状态</h3></div>
+          <div id="syncStatusPanel" class="sync-status-panel">
+            <div class="sync-state-item">
+              <span class="sync-label">连接状态</span>
+              <span class="sync-value" id="syncConnStatus">--</span>
+            </div>
+            <div class="sync-state-item">
+              <span class="sync-label">数据来源</span>
+              <span class="sync-value" id="syncSourceMode">--</span>
+            </div>
+            <div class="sync-state-item">
+              <span class="sync-label">上次同步</span>
+              <span class="sync-value" id="syncLastSync">--</span>
+            </div>
+            <div class="sync-state-item">
+              <span class="sync-label">同步阶段</span>
+              <span class="sync-value" id="syncStage">idle</span>
+            </div>
+            <div class="sync-state-item">
+              <span class="sync-label">进度</span>
+              <div class="sync-progress-wrap">
+                <div class="sync-progress-bar" id="syncProgressBar" style="width:0%"></div>
+                <span id="syncProgressText">0%</span>
+              </div>
+            </div>
+            <div class="sync-state-item">
+              <span class="sync-label">当前关键词</span>
+              <span class="sync-value" id="syncCurrentKeyword">--</span>
+            </div>
+            <div class="sync-state-item" id="syncErrorRow" style="display:none">
+              <span class="sync-label">错误原因</span>
+              <span class="sync-value error" id="syncLastError">--</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-header"><h3>首次设置指引</h3></div>
+          <ol class="setup-steps">
+            <li>打开 Chrome，访问 <code>chrome://extensions</code></li>
+            <li>开启右上角<strong>开发者模式</strong></li>
+            <li>点击<strong>加载已解压的扩展程序</strong>，选择 <code>collector-extension/</code> 目录</li>
+            <li>在 Chrome 中登录 <a href="https://www.xiaohongshu.com" target="_blank">xiaohongshu.com</a></li>
+            <li>回到本看板，点击「立即同步」开始采集</li>
+          </ol>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-header"><h3>关键词矩阵</h3></div>
+          <div id="keywordMatrix" class="keyword-grid"></div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-header"><h3>CSV 应急导入</h3></div>
+          <p class="panel-desc">当自动采集中断时，可通过 CSV 补录数据。导入后将使用同一套情绪/城市/身份/场景分类逻辑。</p>
+          <div class="csv-actions">
+            <button class="btn btn-secondary" onclick="downloadTemplate()">下载模板</button>
+            <label class="btn btn-primary" style="cursor:pointer">
+              选择 CSV 文件
+              <input type="file" accept=".csv" id="csvFileInput" style="display:none" onchange="handleCSVImport(event)">
+            </label>
+          </div>
+          <div id="csvPreview" class="csv-preview" style="display:none"></div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-header"><h3>数据边界说明</h3></div>
+          <ul class="compliance-list">
+            <li>使用本人网页登录态读取小红书网页端正常可见的公开搜索结果</li>
+            <li>低频运行，每关键词默认滚动6次，不提高频率规避限制</li>
+            <li>遇到验证码/访问限制/登录失效立即停止，不绕过平台机制</li>
+            <li>结果不代表小红书全站数据，仅供内部参考</li>
+            <li>正式生产建议采购有明确授权的数据 API</li>
+          </ul>
+        </div>
+      </div>
+
+    </div><!-- /pageContainer -->
+  </main>
+</div><!-- /app -->
+
+<!-- 笔记详情 Modal -->
+<div id="noteModal" class="modal" style="display:none">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="modalTitle">笔记详情</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
